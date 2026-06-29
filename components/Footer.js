@@ -83,7 +83,7 @@ export default function Footer() {
       {/* Copyright */}
       <div className="max-w-[95%] mx-auto mt-12 pt-8 border-t border-gray-800 text-center">
         <p className="text-[12px] text-gray-400">
-          © 2026 Haldar AI & IT. All rights reserved.
+          © 2026 Eyey Optics. All rights reserved.
         </p>
       </div>
     </motion.footer>
