@@ -1,14 +1,215 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiChevronDown, FiSearch, FiHelpCircle } from "react-icons/fi";
+import { FiMenu, FiX, FiChevronDown, FiSearch, FiHelpCircle, FiShoppingCart } from "react-icons/fi";
 import { FaUserCircle, FaWallet } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext"; // ✅ Import Auth Context
 import { useCart } from "../context/CartContext"; // ✅ Import Cart Context
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// Search Input Component to handle search queries cleanly with Suspense support
+function SearchInput({ isMobile, closeMenu }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/products?search=${encodeURIComponent(trimmed)}&limit=6`);
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions(data.products || []);
+          setShowSuggestions(true);
+        }
+      } catch (err) {
+        console.error("Error fetching suggestions:", err);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const navigateToProduct = (product) => {
+    let categoryPath = "eyeglasses";
+    const catLower = product.category?.toLowerCase() || "";
+    if (catLower.includes("sunglasses")) {
+      categoryPath = "sunglasses";
+    } else if (catLower.includes("computer")) {
+      categoryPath = "computer-glasses";
+    } else if (catLower.includes("power")) {
+      categoryPath = "power-glasses";
+    } else if (catLower.includes("contact")) {
+      categoryPath = "contact-lenses";
+    }
+    
+    setSearchQuery("");
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+    router.push(`/${categoryPath}/${product._id}`);
+    if (closeMenu) closeMenu();
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      if (closeMenu) closeMenu();
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) => (prev + 1 < suggestions.length ? prev + 1 : 0));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) => (prev - 1 >= 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+    } else if (e.key === "Enter") {
+      if (activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
+        e.preventDefault();
+        navigateToProduct(suggestions[activeSuggestionIndex]);
+      }
+    }
+  };
+
+  const renderSuggestionsList = () => {
+    if (!showSuggestions || suggestions.length === 0) return null;
+
+    return (
+      <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-md shadow-xl overflow-hidden z-[100] max-h-80 overflow-y-auto animate-fadeIn">
+        <div className="py-1 text-xs text-gray-500 font-bold px-3 border-b border-gray-100 uppercase bg-gray-50">
+          Suggested Products
+        </div>
+        {suggestions.map((product, idx) => {
+          const isActive = idx === activeSuggestionIndex;
+          return (
+            <div
+              key={product._id}
+              onClick={() => navigateToProduct(product)}
+              onMouseEnter={() => setActiveSuggestionIndex(idx)}
+              className={`flex items-center gap-3 p-2.5 cursor-pointer transition-colors duration-150 ${
+                isActive ? "bg-blue-50 text-blue-900" : "hover:bg-gray-100 text-gray-800"
+              }`}
+            >
+              <div className="relative w-8 h-8 flex-shrink-0 bg-gray-100 rounded-md overflow-hidden animate-pulse-once">
+                {product.images && product.images.length > 0 ? (
+                  <Image
+                    src={product.images[0].url}
+                    alt={product.name}
+                    fill
+                    className="object-contain"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-400">
+                    N/A
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate leading-snug">{product.name}</p>
+                <p className="text-xs text-gray-500 truncate leading-none mt-0.5">
+                  {product.brand} • {product.category}
+                </p>
+              </div>
+              <div className="text-sm font-bold text-gray-900">
+                ₹{product.price}
+              </div>
+            </div>
+          );
+        })}
+        <div 
+          onClick={handleSearchSubmit}
+          className="p-3 border-t border-gray-100 text-xs font-bold text-blue-600 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors"
+        >
+          <span>Search for "{searchQuery}" in all products</span>
+          <FiSearch className="w-3.5 h-3.5" />
+        </div>
+      </div>
+    );
+  };
+
+  if (isMobile) {
+    return (
+      <div ref={wrapperRef} className="relative w-full">
+        <form onSubmit={handleSearchSubmit} className="relative w-full">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search..."
+            className="w-full h-10 px-4 py-2 bg-gray-100 rounded-sm text-sm focus:outline-none pr-10 text-black placeholder:text-gray-500 font-medium"
+          />
+          <button type="submit" className="absolute right-3 top-3 text-gray-500 hover:text-black">
+            <FiSearch className="w-4 h-4" />
+          </button>
+        </form>
+        {renderSuggestionsList()}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapperRef} className="hidden md:flex flex-1 max-w-md relative">
+      <form onSubmit={handleSearchSubmit} className="w-full relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="Search for stylish eyeglasses.."
+          className="w-full h-9 px-4 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-gray-400 font-bold text-black placeholder:text-black pr-10"
+        />
+        <button type="submit" className="absolute right-3 top-2.5 text-gray-500 hover:text-black">
+          <FiSearch className="w-4 h-4" />
+        </button>
+      </form>
+      {renderSuggestionsList()}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const router = useRouter();
@@ -66,13 +267,9 @@ export default function Navbar() {
         </Link>
 
         {/* Search Bar (Centered) */}
-        <div className="hidden md:flex flex-1 max-w-md relative">
-          <input
-            type="text"
-            placeholder="Search for stylish eyeglasses.."
-            className="w-full h-9 px-4 py-2 bg-white border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-gray-400 font-bold text-black placeholder:text-black"
-          />
-        </div>
+        <Suspense fallback={<div className="hidden md:flex flex-1 max-w-md h-9 bg-white border border-gray-300 rounded-sm" />}>
+          <SearchInput isMobile={false} />
+        </Suspense>
 
         {/* Top Right Icons */}
         <div className="flex items-center gap-4 md:gap-8 text-gray-700 font-medium">
@@ -119,8 +316,9 @@ export default function Navbar() {
           )}
 
           <div className="flex items-center gap-3">
-            <Link href="/cart" className="relative group">
-              <div className="w-5 h-5 rounded-full bg-[#4DA9FF] flex items-center justify-center text-white text-[10px] font-bold">
+            <Link href="/cart" className="relative group p-1 flex items-center justify-center">
+              <FiShoppingCart className="w-6 h-6 text-black hover:text-blue-600 transition-colors" />
+              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#4DA9FF] flex items-center justify-center text-white text-[10px] font-bold">
                 {cartCount}
               </div>
             </Link>
@@ -205,10 +403,10 @@ export default function Navbar() {
             <Link href="/contact-lenses" className="hover:text-gray-600 py-2">Contact Lenses</Link>
 
             {/* 3D Try On Button */}
-            <button className="bg-gradient-to-r from-[#59a4dc] to-[#30cbd1] text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 font-bold text-[13px] shadow-sm hover:opacity-90 transition-opacity">
+            <Link href="/try-on" className="bg-gradient-to-r from-[#59a4dc] to-[#30cbd1] text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 font-bold text-[13px] shadow-sm hover:opacity-90 transition-opacity">
               <span className="text-base">👓</span>
               3D Try On
-            </button>
+            </Link>
           </div>
         </div>
       )}
@@ -222,14 +420,9 @@ export default function Navbar() {
             exit={{ height: 0, opacity: 0 }}
             className="md:hidden bg-white border-t border-gray-100 flex flex-col p-4 gap-4"
           >
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-full h-10 px-4 py-2 bg-gray-100 rounded-sm text-sm focus:outline-none"
-              />
-              <FiSearch className="absolute right-3 top-3 text-gray-400" />
-            </div>
+            <Suspense fallback={<div className="w-full h-10 bg-gray-100 rounded-sm" />}>
+              <SearchInput isMobile={true} closeMenu={() => setMenuOpen(false)} />
+            </Suspense>
 
             <div className="flex flex-col gap-3 py-2 border-b border-gray-50">
               <Link href="/eyeglasses" className="font-bold text-gray-800">Eyeglasses</Link>
@@ -253,9 +446,9 @@ export default function Navbar() {
               <Link href="/help" className="text-gray-700">Help Center</Link>
             </div>
 
-            <button className="bg-gradient-to-r from-[#59a4dc] to-[#30cbd1] text-white px-4 py-1.5 rounded-md font-bold text-sm text-center mt-2">
+            <Link href="/try-on" onClick={() => setMenuOpen(false)} className="bg-gradient-to-r from-[#59a4dc] to-[#30cbd1] text-white px-4 py-1.5 rounded-md font-bold text-sm text-center mt-2">
               3D Try On
-            </button>
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>
