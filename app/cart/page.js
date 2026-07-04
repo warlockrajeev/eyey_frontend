@@ -456,6 +456,21 @@ export default function CartPage() {
     setDeliveryAvailable(true);
   };
 
+  // Load Razorpay Script dynamically
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== "undefined" && window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   // Handle place order
   const handlePlaceOrder = async () => {
     console.log("=== ORDER PLACEMENT STARTED ===");
@@ -507,8 +522,112 @@ export default function CartPage() {
         notes: "",
       };
 
-      console.log("Making API request with data:", orderData);
+      if (paymentMethod === "online_payment") {
+        const isScriptLoaded = await loadRazorpayScript();
+        if (!isScriptLoaded) {
+          toast.error("Failed to load Razorpay SDK. Please check your internet connection.");
+          setOrderLoading(false);
+          return;
+        }
 
+        console.log("Initiating Razorpay Order...");
+        const razorpayOrderRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/orders/razorpay-order`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              amount: Math.round(total * 100) / 100,
+              currency: "INR",
+            }),
+          }
+        );
+
+        const rzpData = await razorpayOrderRes.json();
+        console.log("Razorpay Order Response:", rzpData);
+
+        if (!rzpData.success) {
+          toast.error(rzpData.message || "Failed to initiate online payment");
+          setOrderLoading(false);
+          return;
+        }
+
+        const options = {
+          key: rzpData.data.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_live_T9QJZrspiHCRJ0",
+          amount: rzpData.data.amount,
+          currency: rzpData.data.currency || "INR",
+          name: "EyeyOptics",
+          description: `Order Payment (${cartItemsArray.length} items)`,
+          image: "/hailogo.png",
+          order_id: rzpData.data.orderId,
+          handler: async function (response) {
+            console.log("Razorpay payment success response:", response);
+            setOrderLoading(true);
+            try {
+              const verifyRes = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/api/orders/verify-razorpay`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                  },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    orderData: {
+                      ...orderData,
+                      paymentMethod: "online_payment",
+                    },
+                  }),
+                }
+              );
+              const verifyData = await verifyRes.json();
+              if (verifyData.success) {
+                setOrderData(verifyData.data);
+                setShowOrderSuccess(true);
+                toast.success("Payment verified & Order placed successfully!");
+              } else {
+                toast.error(verifyData.message || "Payment verification failed");
+              }
+            } catch (err) {
+              console.error("Verification error:", err);
+              toast.error("Failed to verify payment with server");
+            } finally {
+              setOrderLoading(false);
+            }
+          },
+          prefill: {
+            name: selectedAddress.name || "",
+            email: selectedAddress.email || user?.email || "",
+            contact: selectedAddress.phone || "",
+          },
+          notes: {
+            address: `${selectedAddress.address || selectedAddress.addressLine1}, ${selectedAddress.city}, ${selectedAddress.state}`,
+          },
+          theme: {
+            color: "#0f172a",
+          },
+          modal: {
+            ondismiss: function () {
+              setOrderLoading(false);
+              toast.info("Payment process cancelled");
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+        return;
+      }
+
+      console.log("Making COD API request with data:", orderData);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/orders/create`,
         {
@@ -529,29 +648,10 @@ export default function CartPage() {
       if (data.success) {
         console.log("✅ Order successful - Setting modal data");
 
-        // FIRST: Set modal data and show modal
         setOrderData(data.data);
         setShowOrderSuccess(true);
 
-        console.log("Modal state set:", {
-          orderData: data.data,
-          showOrderSuccess: true,
-        });
-
-        // Force a small delay to ensure state is set
-        setTimeout(() => {
-          console.log("Checking modal state after delay:", {
-            showOrderSuccess: true,
-            orderDataExists: !!data.data,
-          });
-        }, 100);
-
         toast.success("Order placed successfully!");
-
-        // Don't clear cart automatically - let user decide when to close modal
-        console.log(
-          "✅ Order completed - cart will be cleared when user closes modal"
-        );
       } else {
         console.error("❌ Order failed:", data.message, data.error);
         const errMsg = data.error
@@ -563,7 +663,9 @@ export default function CartPage() {
       console.error("❌ Order placement error:", error);
       toast.error("Failed to place order");
     } finally {
-      setOrderLoading(false);
+      if (paymentMethod !== "online_payment") {
+        setOrderLoading(false);
+      }
       console.log("=== ORDER PLACEMENT COMPLETED ===");
     }
   };
@@ -1125,22 +1227,44 @@ export default function CartPage() {
                     </div>
                   </div>
 
-                  {/* Online Payment - Disabled */}
-                  <div className="p-3 border border-gray-200 rounded-lg opacity-50 cursor-not-allowed bg-gray-100">
+                  {/* Online Payment (Razorpay) */}
+                  <div
+                    className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                      paymentMethod === "online_payment"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                    onClick={() => setPaymentMethod("online_payment")}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 ${
+                            paymentMethod === "online_payment"
+                              ? "border-blue-500 bg-blue-500"
+                              : "border-gray-300"
+                          }`}
+                        >
+                          {paymentMethod === "online_payment" && (
+                            <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                          )}
+                        </div>
                         <div>
-                          <span className="text-sm font-medium text-gray-600">
-                            Online Payment
-                          </span>
-                          <p className="text-xs text-gray-400">
-                            Credit/Debit Card, UPI, Net Banking
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">
+                              Online Payment (Razorpay)
+                            </span>
+                            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                              Instant
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            UPI (Google Pay, PhonePe, Paytm), Cards, Net Banking & Wallets
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
-                        Coming Soon
+                      <span className="text-xs px-2.5 py-1 bg-emerald-100 text-emerald-700 font-semibold rounded-full flex items-center gap-1">
+                        🔒 Secure
                       </span>
                     </div>
                   </div>
