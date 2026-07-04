@@ -492,7 +492,7 @@ export default function CartPage() {
           size: item.size,
           color: item.color,
           category: item.category,
-          image: item.images?.[0] || item.image,
+          image: (typeof item.images?.[0] === "object" ? item.images[0].url : item.images?.[0]) || (typeof item.image === "object" ? item.image?.url || item.image?.src : item.image) || "",
         })),
         shippingAddress: selectedAddress,
         paymentMethod,
@@ -553,8 +553,11 @@ export default function CartPage() {
           "✅ Order completed - cart will be cleared when user closes modal"
         );
       } else {
-        console.error("❌ Order failed:", data.message);
-        toast.error(data.message || "Failed to place order");
+        console.error("❌ Order failed:", data.message, data.error);
+        const errMsg = data.error
+          ? `${data.message}: ${data.error}`
+          : data.message || "Failed to place order";
+        toast.error(errMsg);
       }
     } catch (error) {
       console.error("❌ Order placement error:", error);
@@ -711,6 +714,22 @@ export default function CartPage() {
                               {item.color && `Color: ${item.color}`}
                             </p>
                           )}
+                          {item.lensPackage && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-800 bg-gray-100 p-2 rounded-lg border border-gray-200">
+                              <span className="font-bold text-gray-900">Lens Plan:</span>
+                              <span className="font-semibold text-gray-800">
+                                {item.lensPackage.name || item.lensPackage.feature || item.lensPackage.optionName}
+                              </span>
+                              {item.lensPackage.thickness && (
+                                <span className="text-gray-500">• {item.lensPackage.thickness}</span>
+                              )}
+                              {item.lensPackage.warranty && (
+                                <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                                  {item.lensPackage.warranty} Warranty
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() => handleRemoveItem(cartKey, item.name)}
@@ -725,14 +744,13 @@ export default function CartPage() {
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold text-gray-900">
-                            ₹{item.price}
+                            ₹{item.price?.toLocaleString()}
                           </span>
-                          {item.originalPrice &&
-                            item.originalPrice > item.price && (
-                              <span className="text-sm text-gray-400 line-through">
-                                ₹{item.originalPrice}
-                              </span>
-                            )}
+                          {item.originalPrice > item.price ? (
+                            <span className="text-sm text-gray-400 line-through">
+                              ₹{item.originalPrice?.toLocaleString()}
+                            </span>
+                          ) : null}
                         </div>
 
                         {/* Quantity Controls */}

@@ -2,13 +2,16 @@
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ShoppingCart, Zap } from "lucide-react";
 import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "../../components/Toast";
 
 export default function ProductsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [sort, setSort] = useState("featured");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [products, setProducts] = useState([]); // State to store fetched products
@@ -18,6 +21,16 @@ export default function ProductsPage() {
   // Cart and Auth context
   const { addToCart, isInCart } = useCart();
   const { user } = useAuth();
+
+  useEffect(() => {
+    const shape = searchParams?.get("shape");
+    if (shape) {
+      setSelectedFilters((prev) => ({
+        ...prev,
+        "Frame Shape": [shape],
+      }));
+    }
+  }, [searchParams]);
 
   // Sidebar filter options
   const filters = {
@@ -31,9 +44,20 @@ export default function ProductsPage() {
     Price: ["Under ₹999", "₹1000 - ₹1999", "₹2000 - ₹2999", "Above ₹3000"],
   };
 
+  // Helper matching function
+  const matchesVal = (field, options) => {
+    if (!options || options.length === 0) return true;
+    if (!field) return false;
+    const target = String(field).toLowerCase().trim();
+    return options.some((opt) => {
+      const optionStr = String(opt).toLowerCase().trim();
+      return target.includes(optionStr) || optionStr.includes(target);
+    });
+  };
+
   // Filtered & Sorted Products
   const filteredProducts = useMemo(() => {
-    let filtered = [...products]; // Use dynamically fetched products
+    let filtered = [...products];
 
     // Apply filters
     for (const [category, options] of Object.entries(selectedFilters)) {
@@ -41,19 +65,19 @@ export default function ProductsPage() {
       filtered = filtered.filter((product) => {
         switch (category) {
           case "Frame Style":
-            return options.includes(product.style);
+            return matchesVal(product.style, options);
           case "Frame Shape":
-            return options.includes(product.shape);
+            return matchesVal(product.shape, options);
           case "Frame Color":
-            return options.includes(product.color);
+            return matchesVal(product.color, options);
           case "Frame Material":
-            return options.includes(product.material);
+            return matchesVal(product.material, options);
           case "Brands":
-            return options.includes(product.brand);
+            return matchesVal(product.brand, options);
           case "Collections":
-            return options.includes(product.collection);
+            return matchesVal(product.collection, options);
           case "Frame Size":
-            return options.includes(product.size);
+            return matchesVal(product.size, options);
           case "Price":
             return options.some((priceRange) => {
               if (priceRange === "Under ₹999") return product.price < 999;
@@ -62,6 +86,7 @@ export default function ProductsPage() {
               if (priceRange === "₹2000 - ₹2999")
                 return product.price >= 2000 && product.price <= 2999;
               if (priceRange === "Above ₹3000") return product.price > 3000;
+              return true;
             });
           default:
             return true;
@@ -72,7 +97,7 @@ export default function ProductsPage() {
     // Apply sorting
     if (sort === "low-to-high") filtered.sort((a, b) => a.price - b.price);
     if (sort === "high-to-low") filtered.sort((a, b) => b.price - a.price);
-    if (sort === "new") filtered.sort((a, b) => b.id - a.id);
+    if (sort === "new") filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
     return filtered;
   }, [products, selectedFilters, sort]);
@@ -104,7 +129,7 @@ export default function ProductsPage() {
     };
 
     fetchProducts();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   const slugify = (text) =>
     text
@@ -127,7 +152,7 @@ export default function ProductsPage() {
   };
 
   const handleAddToCart = async (e, productId) => {
-    e.preventDefault(); // Prevent navigation to product page
+    e.preventDefault();
     e.stopPropagation();
 
     if (!user) {
@@ -140,6 +165,23 @@ export default function ProductsPage() {
       toast.success("Product added to cart successfully!");
     } else {
       toast.error("Failed to add product to cart");
+    }
+  };
+
+  const handleBuyNow = async (e, productId) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      toast.error("Please login to buy items");
+      return;
+    }
+
+    const success = await addToCart(productId, 1);
+    if (success) {
+      router.push("/cart");
+    } else {
+      toast.error("Failed to process request");
     }
   };
 
@@ -235,60 +277,119 @@ export default function ProductsPage() {
               variants={containerVariants}
             >
               {filteredProducts.map((product) => {
-                const discount = Math.round(
-                  ((product.originalPrice - product.price) /
-                    product.originalPrice) *
-                    100
-                );
+                const discount =
+                  product.originalPrice && product.originalPrice > product.price
+                    ? Math.round(
+                        ((product.originalPrice - product.price) /
+                          product.originalPrice) *
+                          100
+                      )
+                    : 0;
 
                 return (
                   <motion.div key={product._id} variants={productVariants}>
-                    <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-2xl hover:scale-[1.02] transform transition-all duration-300">
-                      {product.bestSeller && (
-                        <span className="absolute top-3 left-3 z-10 bg-gradient-to-r from-[#00c6ff] to-[#0072ff] text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
-                          Best Seller
-                        </span>
-                      )}
+                    <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-2xl hover:scale-[1.02] transform transition-all duration-300 flex flex-col justify-between h-full">
+                      <div>
+                        {product.bestSeller && (
+                          <span className="absolute top-3 left-3 z-10 bg-gradient-to-r from-gray-800 to-gray-900 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
+                            Best Seller
+                          </span>
+                        )}
 
-                      <Link
-                        href={`/eyeglasses/${product._id}`}
-                        className="block"
-                      >
-                        <div className="relative w-full h-64 bg-gray-50 z-0">
-                          {product.images && product.images.length > 0 && (
-                            <Image
-                              src={product.images[0].url}
-                              alt={product.name}
-                              fill
-                              className="object-contain p-6 transition-transform duration-300 hover:scale-105"
-                            />
-                          )}
-                        </div>
+                        {product.stock <= 0 ? (
+                          <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider">
+                            Out of Stock
+                          </span>
+                        ) : product.stock <= 5 ? (
+                          <span className="absolute top-3 right-3 z-10 bg-amber-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 animate-pulse">
+                            ⚡ Only {product.stock} left
+                          </span>
+                        ) : null}
 
-                        <div className="p-5 space-y-3">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {product.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {product.size}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-gray-900">
-                              ₹{product.price}
-                            </span>
-                            {product.originalPrice && (
-                              <span className="text-sm text-gray-400 line-through">
-                                ₹{product.originalPrice}
-                              </span>
-                            )}
-                            {product.originalPrice && discount > 0 && (
-                              <span className="text-sm text-green-600 font-medium">
-                                ({discount}% OFF)
-                              </span>
+                        <Link
+                          href={`/eyeglasses/${product._id}`}
+                          className="block"
+                        >
+                          <div className="relative w-full h-64 bg-gray-50 z-0">
+                            {product.images && product.images.length > 0 && (
+                              <Image
+                                src={product.images[0].url}
+                                alt={product.name}
+                                fill
+                                className="object-contain p-6 transition-transform duration-300 hover:scale-105"
+                              />
                             )}
                           </div>
-                        </div>
-                      </Link>
+
+                          <div className="p-5 space-y-2">
+                            <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
+                              {product.name}
+                            </h3>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>{product.brand || product.size || "Standard"}</span>
+                              {product.shape && (
+                                <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-medium">
+                                  {product.shape}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 pt-1">
+                              <span className="text-lg font-bold text-gray-900">
+                                ₹{product.price}
+                              </span>
+                              {product.originalPrice > 0 && (
+                                <span className="text-sm text-gray-400 line-through">
+                                  ₹{product.originalPrice}
+                                </span>
+                              )}
+                              {discount > 0 && (
+                                <span className="text-sm text-green-600 font-medium">
+                                  ({discount}% OFF)
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Stock Indicator Line */}
+                            {product.stock <= 0 ? (
+                              <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                                <span>❌</span> Out of Stock
+                              </p>
+                            ) : product.stock <= 5 ? (
+                              <p className="text-xs text-amber-600 font-bold flex items-center gap-1 pt-1">
+                                <span>🔥</span> Low Stock: Only {product.stock} left!
+                              </p>
+                            ) : null}
+                          </div>
+                        </Link>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="p-5 pt-0 grid grid-cols-2 gap-2">
+                        <button
+                          disabled={product.stock <= 0}
+                          onClick={(e) => handleAddToCart(e, product._id)}
+                          className={`w-full py-2.5 px-3 border text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1.5 ${
+                            product.stock <= 0
+                              ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
+                              : "bg-gray-100 hover:bg-gray-200 text-gray-900 border-gray-300"
+                          }`}
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          {product.stock <= 0 ? "Out of Stock" : "Add to Cart"}
+                        </button>
+                        <button
+                          disabled={product.stock <= 0}
+                          onClick={(e) => handleBuyNow(e, product._id)}
+                          className={`w-full py-2.5 px-3 text-xs font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-1.5 ${
+                            product.stock <= 0
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-gray-900 hover:bg-black text-white"
+                          }`}
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          Buy Now
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 );

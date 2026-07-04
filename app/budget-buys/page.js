@@ -9,29 +9,72 @@ import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "../../components/Toast";
 
-export default function HotSellersPage() {
+export default function BudgetBuysPage() {
   const router = useRouter();
-  const [sort, setSort] = useState("featured");
+  const [sort, setSort] = useState("low-to-high");
   const [selectedFilters, setSelectedFilters] = useState({});
-  const [products, setProducts] = useState([]); // State to store fetched products
-  const [loading, setLoading] = useState(true); // Loading state
-  const [error, setError] = useState(null); // Error state
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Cart and Auth context
   const { addToCart } = useCart();
   const { user } = useAuth();
 
-  // Sidebar filter options
   const filters = {
     "Frame Style": ["Full Rim", "Half Rim", "Rimless"],
-    "Frame Shape": ["Rectangle", "Round", "Aviator", "Cat Eye", "Square"],
-    "Frame Color": ["Black", "Blue", "Brown", "Transparent", "Gold"],
-    "Frame Material": ["Metal", "Plastic", "TR90", "Titanium"],
-    Brands: ["Ray-Ban", "Oakley", "Fastrack", "Titan", "Vogue"],
-    Collections: ["Premium", "Trendy", "Budget", "Designer"],
-    "Frame Size": ["Small", "Medium", "Large"],
-    Price: ["Under ₹999", "₹1000 - ₹1999", "₹2000 - ₹2999", "Above ₹3000"],
+    "Frame Shape": ["Rectangle", "Round", "Aviator", "Square", "Cat Eye"],
+    "Frame Color": ["Black", "Blue", "Brown", "Transparent"],
+    Brands: ["Ray-Ban", "Fastrack", "Titan", "Vogue"],
+    Price: ["Under ₹999", "₹1000 - ₹1999"],
   };
+
+  const matchesVal = (field, options) => {
+    if (!options || options.length === 0) return true;
+    if (!field) return false;
+    const target = String(field).toLowerCase().trim();
+    return options.some((opt) => {
+      const optionStr = String(opt).toLowerCase().trim();
+      return target.includes(optionStr) || optionStr.includes(target);
+    });
+  };
+
+  const filteredProducts = useMemo(() => {
+    let filtered = [...products];
+
+    // Filter budget items (< 2000 by default or as filtered)
+    filtered = filtered.filter((product) => product.price <= 2500);
+
+    for (const [category, options] of Object.entries(selectedFilters)) {
+      if (options.length === 0) continue;
+      filtered = filtered.filter((product) => {
+        switch (category) {
+          case "Frame Style":
+            return matchesVal(product.style, options);
+          case "Frame Shape":
+            return matchesVal(product.shape, options);
+          case "Frame Color":
+            return matchesVal(product.color, options);
+          case "Brands":
+            return matchesVal(product.brand, options);
+          case "Price":
+            return options.some((priceRange) => {
+              if (priceRange === "Under ₹999") return product.price < 999;
+              if (priceRange === "₹1000 - ₹1999")
+                return product.price >= 1000 && product.price <= 1999;
+              return true;
+            });
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (sort === "low-to-high") filtered.sort((a, b) => a.price - b.price);
+    if (sort === "high-to-low") filtered.sort((a, b) => b.price - a.price);
+    if (sort === "new") filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    return filtered;
+  }, [products, selectedFilters, sort]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -39,47 +82,29 @@ export default function HotSellersPage() {
         setLoading(true);
         setError(null);
         const res = await fetch(
-          `${
-            process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-          }/api/products?hotSeller=true`,
-          {
-            method: "GET",
-          }
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/products`
         );
         if (!res.ok) {
-          throw new Error("Failed to fetch hot sellers");
+          throw new Error("Failed to fetch products");
         }
         const data = await res.json();
-        setProducts(data.products);
+        setProducts(data.products || []);
       } catch (err) {
-        console.error("Error fetching hot sellers:", err);
-        setError("Failed to load hot sellers. Please try again later.");
+        console.error("Error fetching budget products:", err);
+        setError("Failed to load budget products. Please try again later.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchProducts();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
-  const slugify = (text) =>
-    text
-      ? text
-          .toLowerCase()
-          .replace(/ /g, "-")
-          .replace(/[^\w-]+/g, "")
-      : "";
-
-  // Filter handler
   const handleFilterChange = (category, option, checked) => {
     setSelectedFilters((prev) => {
       const prevOptions = prev[category] || [];
-      let newOptions = [];
-      if (checked) {
-        newOptions = [...prevOptions, option];
-      } else {
-        newOptions = prevOptions.filter((o) => o !== option);
-      }
+      let newOptions = checked
+        ? [...prevOptions, option]
+        : prevOptions.filter((o) => o !== option);
       return { ...prev, [category]: newOptions };
     });
   };
@@ -118,63 +143,6 @@ export default function HotSellersPage() {
     }
   };
 
-  // Helper matching function
-  const matchesVal = (field, options) => {
-    if (!options || options.length === 0) return true;
-    if (!field) return false;
-    const target = String(field).toLowerCase().trim();
-    return options.some((opt) => {
-      const optionStr = String(opt).toLowerCase().trim();
-      return target.includes(optionStr) || optionStr.includes(target);
-    });
-  };
-
-  // Filtered & Sorted Products
-  const filteredProducts = useMemo(() => {
-    let filtered = [...products];
-
-    for (const [category, options] of Object.entries(selectedFilters)) {
-      if (options.length === 0) continue;
-      filtered = filtered.filter((product) => {
-        switch (category) {
-          case "Frame Style":
-            return matchesVal(product.style, options);
-          case "Frame Shape":
-            return matchesVal(product.shape, options);
-          case "Frame Color":
-            return matchesVal(product.color, options);
-          case "Frame Material":
-            return matchesVal(product.material, options);
-          case "Brands":
-            return matchesVal(product.brand, options);
-          case "Collections":
-            return matchesVal(product.collection, options);
-          case "Frame Size":
-            return matchesVal(product.size, options);
-          case "Price":
-            return options.some((priceRange) => {
-              if (priceRange === "Under ₹999") return product.price < 999;
-              if (priceRange === "₹1000 - ₹1999")
-                return product.price >= 1000 && product.price <= 1999;
-              if (priceRange === "₹2000 - ₹2999")
-                return product.price >= 2000 && product.price <= 2999;
-              if (priceRange === "Above ₹3000") return product.price > 3000;
-              return true;
-            });
-          default:
-            return true;
-        }
-      });
-    }
-
-    if (sort === "low-to-high") filtered.sort((a, b) => a.price - b.price);
-    if (sort === "high-to-low") filtered.sort((a, b) => b.price - a.price);
-    if (sort === "new") filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-    return filtered;
-  }, [products, selectedFilters, sort]);
-
-  // Motion Variants
   const containerVariants = {
     hidden: {},
     show: { transition: { staggerChildren: 0.1 } },
@@ -196,11 +164,20 @@ export default function HotSellersPage() {
       >
         <Image
           src="/banner2.svg"
-          alt="Hot Sellers Banner"
+          alt="Budget Buys Banner"
           fill
           className="object-cover scale-105 transition-transform duration-700 ease-out hover:scale-110"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-gray-800/20 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-gray-900/30 to-transparent flex items-center px-8 md:px-16">
+          <div className="text-white">
+            <h1 className="text-3xl md:text-5xl font-extrabold mb-2 tracking-tight">
+              Budget Buys
+            </h1>
+            <p className="text-sm md:text-lg text-gray-200">
+              Unbeatable prices on high quality stylish eyewear starting from pocket-friendly prices!
+            </p>
+          </div>
+        </div>
       </motion.div>
 
       <div className="flex flex-col md:flex-row">
@@ -228,27 +205,24 @@ export default function HotSellersPage() {
 
         {/* Main Content */}
         <main className="flex-1 p-6">
-          {/* Sorting Bar */}
           <div className="flex items-center justify-between mb-6 border-b border-gray-300 pb-3">
             <h2 className="text-xl font-semibold text-gray-800 tracking-wide">
-              Hot Sellers
+              Budget Buys Collection
             </h2>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
               className="bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300 rounded px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 transition"
             >
-              <option value="featured">Featured</option>
               <option value="low-to-high">Price: Low to High</option>
               <option value="high-to-low">Price: High to Low</option>
               <option value="new">Newest First</option>
             </select>
           </div>
 
-          {/* Products Grid */}
           {loading ? (
             <div className="text-center py-10 text-lg text-gray-700">
-              Loading hot sellers...
+              Loading budget buys...
             </div>
           ) : error ? (
             <div className="text-center py-10 text-lg text-red-600">
@@ -256,7 +230,7 @@ export default function HotSellersPage() {
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-10 text-lg text-gray-700">
-              No hot sellers found.
+              No budget products found.
             </div>
           ) : (
             <motion.div
@@ -265,7 +239,7 @@ export default function HotSellersPage() {
               animate="show"
               variants={containerVariants}
             >
-              {filteredProducts.map((product) => {
+              {filteredProducts.map((product, index) => {
                 const discount =
                   product.originalPrice && product.originalPrice > product.price
                     ? Math.round(
@@ -276,11 +250,14 @@ export default function HotSellersPage() {
                     : 0;
 
                 return (
-                  <motion.div key={product._id} variants={productVariants}>
+                  <motion.div
+                    key={product._id || product.id || index}
+                    variants={productVariants}
+                  >
                     <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-2xl hover:scale-[1.02] transform transition-all duration-300 flex flex-col justify-between h-full">
                       <div>
-                        <span className="absolute top-3 left-3 z-10 bg-gradient-to-r from-gray-800 to-gray-900 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
-                          Hot Seller
+                        <span className="absolute top-3 left-3 z-10 bg-orange-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
+                          Budget Pick
                         </span>
 
                         <Link
@@ -288,14 +265,16 @@ export default function HotSellersPage() {
                           className="block"
                         >
                           <div className="relative w-full h-64 bg-gray-50 z-0">
-                            {product.images && product.images.length > 0 && (
-                              <Image
-                                src={product.images[0].url}
-                                alt={product.name}
-                                fill
-                                className="object-contain p-6 transition-transform duration-300 hover:scale-105"
-                              />
-                            )}
+                            <Image
+                              src={
+                                product.images && product.images.length > 0
+                                  ? product.images[0].url
+                                  : "/placeholder.jpg"
+                              }
+                              alt={product.name}
+                              fill
+                              className="object-contain p-6 transition-transform duration-300 hover:scale-105"
+                            />
                           </div>
 
                           <div className="p-5 space-y-2">
@@ -329,7 +308,6 @@ export default function HotSellersPage() {
                         </Link>
                       </div>
 
-                      {/* Action Buttons */}
                       <div className="p-5 pt-0 grid grid-cols-2 gap-2">
                         <button
                           onClick={(e) => handleAddToCart(e, product._id)}
@@ -358,7 +336,6 @@ export default function HotSellersPage() {
   );
 }
 
-/* Sidebar Dropdown Component */
 function FilterDropdown({ title, options, selectedOptions, onChange }) {
   const [open, setOpen] = useState(false);
 

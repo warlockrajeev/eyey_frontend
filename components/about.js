@@ -1,12 +1,13 @@
 "use client";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { FiChevronRight } from "react-icons/fi";
 
 export default function About() {
   const faqQuestions = [
-    "Is Eyey a legit website?",
-    "When can I expect my order?",
-    "How do I contact customer support?",
+    { text: "Is Eyey a legit website?", link: "/faq" },
+    { text: "When can I expect my order?", link: "/faq" },
+    { text: "How do I contact customer support?", link: "/contact" },
   ];
 
   return (
@@ -19,7 +20,11 @@ export default function About() {
       {/* Intro Text */}
       <div className="space-y-3 mb-6 text-[13px] text-gray-500 leading-relaxed font-normal">
         <p>
-          Eyey is disrupting the eyewear industry. No more spending excessively to get a pair of quality eyewear. Get the best of <span className="text-blue-500 cursor-pointer">eyeglasses</span> from major brands on one platform. With offers like Blink you can Buy 1 & get 1 free. EMELuxe membership program gets you priority offers, discounts and deals.
+          Eyey is disrupting the eyewear industry. No more spending excessively to get a pair of quality eyewear. Get the best of{" "}
+          <Link href="/eyeglasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+            eyeglasses
+          </Link>{" "}
+          from major brands on one platform. With offers like Blink you can Buy 1 & get 1 free. EMELuxe membership program gets you priority offers, discounts and deals.
         </p>
         <p>
           Get 14 days no questions asked refunds on every purchase! Eyey an international eyewear retailer is now 4,00,000+ customers strong and is one of the fastest growing platforms.
@@ -33,7 +38,31 @@ export default function About() {
             Eyeglasses - Browse, Click, Buy eyeglasses & frames that flatter your face and flaunt them
           </h3>
           <p className="text-[13px] text-gray-500 leading-relaxed">
-            Get your essential eye accessory fix with top-notch Eyeglasses range on Eyey.us. With a range of <span className="text-blue-500 cursor-pointer">eyeglasses for men</span> and <span className="text-blue-500 cursor-pointer">women</span>, get access to the most stylish range of prices starting from $0/- only. We also have different shapes like <span className="text-blue-500 cursor-pointer">Full Rim Eyeglasses</span>, <span className="text-blue-500 cursor-pointer">Half Rim Eyeglasses</span>, <span className="text-blue-500 cursor-pointer">Rimless Eyeglasses</span>, <span className="text-blue-500 cursor-pointer">Cat Eye Glasses</span> and more with top brands like Nerdlane and Mirar.
+            Get your essential eye accessory fix with top-notch Eyeglasses range on Eyey.us. With a range of{" "}
+            <Link href="/men" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              eyeglasses for men
+            </Link>{" "}
+            and{" "}
+            <Link href="/women" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              women
+            </Link>
+            , get access to the most stylish range of prices starting from $0/- only. We also have different shapes like{" "}
+            <Link href="/eyeglasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              Full Rim Eyeglasses
+            </Link>
+            ,{" "}
+            <Link href="/eyeglasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              Half Rim Eyeglasses
+            </Link>
+            ,{" "}
+            <Link href="/eyeglasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              Rimless Eyeglasses
+            </Link>
+            ,{" "}
+            <Link href="/eyeglasses?shape=Cat+Eye" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              Cat Eye Glasses
+            </Link>{" "}
+            and more with top brands like Nerdlane and Mirar.
           </p>
         </div>
 
@@ -42,9 +71,16 @@ export default function About() {
             Computer glasses - Protect your eyes from harmful blue light
           </h3>
           <p className="text-[13px] text-gray-500 leading-relaxed">
-            Discover <span className="text-blue-500 cursor-pointer">computer glasses</span> that protect your eyes from harmful UV rays, Blue rays and glare. Use your digital devices worry free with utmost eye comfort. Computer glasses have become a necessity for the current era.
+            Discover{" "}
+            <Link href="/computer-glasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              computer glasses
+            </Link>{" "}
+            that protect your eyes from harmful UV rays, Blue rays and glare. Use your digital devices worry free with utmost eye comfort. Computer glasses have become a necessity for the current era.
             <br />
-            Explore EMELuxe options with Priority features like access to new releases, luxury brands on discounts, offers and more. Buy 1 get 1 offer with Blink. <span className="text-blue-500 cursor-pointer">Click to explore.</span>
+            Explore EMELuxe options with Priority features like access to new releases, luxury brands on discounts, offers and more. Buy 1 get 1 offer with Blink.{" "}
+            <Link href="/computer-glasses" className="text-blue-500 hover:underline cursor-pointer font-medium">
+              Click to explore.
+            </Link>
           </p>
         </div>
 
@@ -63,13 +99,14 @@ export default function About() {
         <h2 className="text-lg font-bold text-black mb-4 uppercase tracking-tight">FAQ</h2>
         <div className="space-y-2">
           {faqQuestions.map((q, i) => (
-            <div
-              key={i}
-              className="bg-white border-b border-gray-100 p-3 md:p-4 flex items-center justify-between shadow-sm cursor-pointer group hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-sm font-bold text-gray-800">{q}</span>
-              <FiChevronRight className="text-gray-400 group-hover:text-black transition-colors" />
-            </div>
+            <Link key={i} href={q.link} className="block">
+              <div className="bg-white border-b border-gray-100 p-3 md:p-4 flex items-center justify-between shadow-sm cursor-pointer group hover:bg-gray-50 transition-colors">
+                <span className="text-sm font-bold text-gray-800 group-hover:text-orange-600 transition-colors">
+                  {q.text}
+                </span>
+                <FiChevronRight className="text-gray-400 group-hover:text-black transition-colors" />
+              </div>
+            </Link>
           ))}
         </div>
       </div>

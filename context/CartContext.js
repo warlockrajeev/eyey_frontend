@@ -28,7 +28,7 @@ export const CartProvider = ({ children }) => {
   const [cartCount, setCartCount] = useState(0);
 
   // Add to cart - Backend first, then sync frontend
-  const addToCart = async (productId, quantity = 1) => {
+  const addToCart = async (productId, quantity = 1, lensPackage = null, price = null) => {
     if (!user?._id) {
       console.error("User not logged in");
       return false;
@@ -38,6 +38,8 @@ export const CartProvider = ({ children }) => {
     console.log("Product ID:", productId);
     console.log("Quantity:", quantity);
     console.log("User ID:", user._id);
+    console.log("Lens Package:", lensPackage);
+    console.log("Custom Price:", price);
 
     try {
       setLoading(true);
@@ -56,6 +58,8 @@ export const CartProvider = ({ children }) => {
             userId: user._id,
             productId,
             quantity,
+            lensPackage,
+            price,
           }),
         }
       );

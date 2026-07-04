@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiChevronDown, FiSearch, FiHelpCircle, FiShoppingCart } from "react-icons/fi";
+import { FiMenu, FiX, FiChevronDown, FiSearch, FiHelpCircle, FiShoppingCart, FiHeart } from "react-icons/fi";
 import { FaUserCircle, FaWallet } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext"; // ✅ Import Auth Context
 import { useCart } from "../context/CartContext"; // ✅ Import Cart Context
@@ -217,10 +217,30 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [eyeglassesOpen, setEyeglassesOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
 
   // ✅ Use AuthContext
   const { user, logout } = useAuth();
   const { cartCount } = useCart(); // ✅ Get cart count
+
+  // Sync wishlist count from localStorage
+  useEffect(() => {
+    const updateWishlistCount = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem("wishlist")) || [];
+        setWishlistCount(stored.length);
+      } catch (e) {
+        setWishlistCount(0);
+      }
+    };
+    updateWishlistCount();
+    window.addEventListener("storage", updateWishlistCount);
+    window.addEventListener("wishlistUpdated", updateWishlistCount);
+    return () => {
+      window.removeEventListener("storage", updateWishlistCount);
+      window.removeEventListener("wishlistUpdated", updateWishlistCount);
+    };
+  }, []);
 
   // Add click outside handler for profile dropdown
   useEffect(() => {
@@ -273,9 +293,9 @@ export default function Navbar() {
 
         {/* Top Right Icons */}
         <div className="flex items-center gap-4 md:gap-8 text-gray-700 font-medium">
-          <Link href="/help" className="hidden md:flex items-center gap-1 text-black font-bold text-sm">
+          {/* <Link href="/help" className="hidden md:flex items-center gap-1 text-black font-bold text-sm">
             Help
-          </Link>
+          </Link> */}
 
           {user ? (
             <div className="relative profile-dropdown-container">
@@ -297,6 +317,13 @@ export default function Navbar() {
                   >
                     My Account
                   </Link>
+                  <Link
+                    href="/orders"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setProfileDropdownOpen(false)}
+                  >
+                    My Orders
+                  </Link>
                   <button
                     onClick={() => {
                       handleLogout();
@@ -315,8 +342,16 @@ export default function Navbar() {
             </Link>
           )}
 
-          <div className="flex items-center gap-3">
-            <Link href="/cart" className="relative group p-1 flex items-center justify-center">
+          <div className="flex items-center gap-4">
+            <Link href="/wishlist" className="relative group p-1 flex items-center justify-center" title="Wishlist" aria-label="Wishlist">
+              <FiHeart className="w-6 h-6 text-black hover:text-red-500 transition-colors" />
+              {isClient && wishlistCount > 0 && (
+                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-bold">
+                  {wishlistCount}
+                </div>
+              )}
+            </Link>
+            <Link href="/cart" className="relative group p-1 flex items-center justify-center" aria-label="Cart">
               <FiShoppingCart className="w-6 h-6 text-black hover:text-blue-600 transition-colors" />
               <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#4DA9FF] flex items-center justify-center text-white text-[10px] font-bold">
                 {cartCount}
@@ -436,12 +471,23 @@ export default function Navbar() {
               {user ? (
                 <>
                   <div className="text-sm text-gray-500 font-bold">WELCOME, {user.name}</div>
-                  <Link href="/profile" className="text-gray-700">My Account</Link>
+                  <Link href="/profile" onClick={() => setMenuOpen(false)} className="text-gray-700">My Account</Link>
+                  <Link href="/orders" onClick={() => setMenuOpen(false)} className="text-gray-700">My Orders</Link>
                   <button onClick={handleLogout} className="text-red-500 text-left">Logout</button>
                 </>
               ) : (
                 <Link href="/signin" className="font-bold text-gray-800">Sign In</Link>
               )}
+              <Link href="/wishlist" onClick={() => setMenuOpen(false)} className="text-gray-700 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FiHeart className="w-5 h-5 text-gray-700" /> Wishlist
+                </span>
+                {isClient && wishlistCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                    {wishlistCount}
+                  </span>
+                )}
+              </Link>
               <Link href="/cart" className="text-gray-700">Cart ({cartCount})</Link>
               <Link href="/help" className="text-gray-700">Help Center</Link>
             </div>

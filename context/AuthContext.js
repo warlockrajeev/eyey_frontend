@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
-import { auth, googleProvider } from "../lib/firebase";
+import { auth, googleProvider, signInWithEmailAndPassword } from "../lib/firebase";
 import { signInWithPopup } from "firebase/auth";
 
 const AuthContext = createContext();
@@ -130,6 +130,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
+    // Step 1: Try backend login (MongoDB password check)
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/users/login`,
       {
@@ -144,21 +145,51 @@ export const AuthProvider = ({ children }) => {
 
     if (res.ok) {
       console.log("✅ Login response received:", data);
-
-      // Set user data immediately from login response
       setUser(data);
       localStorage.setItem("user", JSON.stringify(data));
-      setHasLoggedOut(false); // Reset logout flag on successful login
-      localStorage.removeItem('hasLoggedOut'); // Clear persisted logout state
-      localStorage.removeItem('logoutTime'); // Clear logout timestamp
-
-      // Also fetch current user to ensure session is valid
+      setHasLoggedOut(false);
+      localStorage.removeItem('hasLoggedOut');
+      localStorage.removeItem('logoutTime');
       await fetchCurrentUser();
       console.log("✅ Login successful");
-    } else {
-      console.error("❌ Login failed", data.message);
-      throw new Error(data.message || "Login failed");
+      return;
     }
+
+    // Step 2: Backend login failed — try Firebase Auth
+    // (handles the case where password was reset via Firebase)
+    try {
+      console.log("🔄 Backend login failed, trying Firebase Auth...");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await userCredential.user.getIdToken();
+
+      // Step 3: Sync the new password to MongoDB
+      const syncRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/sync-firebase-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ idToken, password }),
+        }
+      );
+
+      const syncData = await syncRes.json();
+
+      if (syncRes.ok) {
+        console.log("✅ Firebase login + password sync successful");
+        setUser(syncData);
+        localStorage.setItem("user", JSON.stringify(syncData));
+        setHasLoggedOut(false);
+        localStorage.removeItem('hasLoggedOut');
+        localStorage.removeItem('logoutTime');
+        return;
+      }
+    } catch (firebaseErr) {
+      console.log("❌ Firebase Auth login also failed:", firebaseErr.message);
+    }
+
+    // Both methods failed
+    throw new Error(data.message || "Invalid email or password");
   };
 
   const fetchCurrentUser = async () => {

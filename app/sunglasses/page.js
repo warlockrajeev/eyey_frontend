@@ -2,13 +2,15 @@
 import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ShoppingCart, Zap } from "lucide-react";
 import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "../../components/Toast";
 
 export default function SunglassesPage() {
+  const router = useRouter();
   const [sort, setSort] = useState("featured");
   const [selectedFilters, setSelectedFilters] = useState({});
   const [products, setProducts] = useState([]); // State to store fetched products
@@ -31,67 +33,6 @@ export default function SunglassesPage() {
     Price: ["Under ₹1499", "₹1500 - ₹2999", "₹3000 - ₹4999", "Above ₹5000"],
   };
 
-  // ✅ Make products stable with useMemo
-  // const products = useMemo(() => [
-  //   {
-  //     id: 1,
-  //     name: "Ray-Ban Aviator Sunglasses",
-  //     lens: "Polarized",
-  //     shape: "Aviator",
-  //     color: "Green",
-  //     material: "Metal",
-  //     brand: "Ray-Ban",
-  //     collection: "Premium",
-  //     size: "Medium",
-  //     price: 4999,
-  //     originalPrice: 6499,
-  //     image: "/products1/trending3.png",
-  //     bestSeller: true,
-  //   },
-  //   {
-  //     id: 2,
-  //     name: "Oakley Sports Sunglasses",
-  //     lens: "UV Protected",
-  //     shape: "Square",
-  //     color: "Black",
-  //     material: "TR90",
-  //     brand: "Oakley",
-  //     collection: "Sporty",
-  //     size: "Large",
-  //     price: 3799,
-  //     originalPrice: 4599,
-  //     image: "/bb4.jpg",
-  //   },
-  //   {
-  //     id: 3,
-  //     name: "Fastrack Round Sunglasses",
-  //     lens: "Non-Polarized",
-  //     shape: "Round",
-  //     color: "Brown",
-  //     material: "Plastic",
-  //     brand: "Fastrack",
-  //     collection: "Trendy",
-  //     size: "Small",
-  //     price: 1899,
-  //     originalPrice: 2299,
-  //     image: "/bb7.jpg",
-  //   },
-  //   {
-  //     id: 4,
-  //     name: "Gucci Cat Eye Sunglasses",
-  //     lens: "Photochromic",
-  //     shape: "Cat Eye",
-  //     color: "Gradient",
-  //     material: "Metal",
-  //     brand: "Gucci",
-  //     collection: "Luxury",
-  //     size: "Medium",
-  //     price: 7999,
-  //     originalPrice: 9999,
-  //     image: "/bs1.jpg",
-  //   },
-  // ], []); // runs once, stays stable
-
   const slugify = (text) =>
     text
       .toLowerCase()
@@ -112,53 +53,73 @@ export default function SunglassesPage() {
     });
   };
 
-  // Handle add to cart
-  const handleAddToCart = async (e, product) => {
+  const handleAddToCart = async (e, productId) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (!user) {
-      toast.error("Please sign in to add items to cart");
+      toast.error("Please login to add items to cart");
       return;
     }
 
-    try {
-      await addToCart({
-        productId: product._id,
-        name: product.name,
-        price: product.price,
-        image: product.images?.[0]?.url || "/placeholder-image.jpg",
-        quantity: 1,
-      });
-      toast.success(`${product.name} added to cart!`);
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      toast.error("Failed to add item to cart");
+    const success = await addToCart(productId, 1);
+    if (success) {
+      toast.success("Product added to cart successfully!");
+    } else {
+      toast.error("Failed to add product to cart");
     }
+  };
+
+  const handleBuyNow = async (e, productId) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) {
+      toast.error("Please login to buy items");
+      return;
+    }
+
+    const success = await addToCart(productId, 1);
+    if (success) {
+      router.push("/cart");
+    } else {
+      toast.error("Failed to process request");
+    }
+  };
+
+  // Helper matching function
+  const matchesVal = (field, options) => {
+    if (!options || options.length === 0) return true;
+    if (!field) return false;
+    const target = String(field).toLowerCase().trim();
+    return options.some((opt) => {
+      const optionStr = String(opt).toLowerCase().trim();
+      return target.includes(optionStr) || optionStr.includes(target);
+    });
   };
 
   // Filtered & Sorted Products
   const filteredProducts = useMemo(() => {
-    let filtered = [...products]; // Use dynamically fetched products
+    let filtered = [...products];
 
     for (const [category, options] of Object.entries(selectedFilters)) {
       if (options.length === 0) continue;
       filtered = filtered.filter((product) => {
         switch (category) {
           case "Lens Type":
-            return options.includes(product.lens);
+            return matchesVal(product.lens, options);
           case "Frame Shape":
-            return options.includes(product.shape);
+            return matchesVal(product.shape, options);
           case "Lens Color":
-            return options.includes(product.color);
+            return matchesVal(product.color, options);
           case "Frame Material":
-            return options.includes(product.material);
+            return matchesVal(product.material, options);
           case "Brands":
-            return options.includes(product.brand);
+            return matchesVal(product.brand, options);
           case "Collections":
-            return options.includes(product.collection);
+            return matchesVal(product.collection, options);
           case "Frame Size":
-            return options.includes(product.size);
+            return matchesVal(product.size, options);
           case "Price":
             return options.some((priceRange) => {
               if (priceRange === "Under ₹1499") return product.price < 1499;
@@ -167,6 +128,7 @@ export default function SunglassesPage() {
               if (priceRange === "₹3000 - ₹4999")
                 return product.price >= 3000 && product.price <= 4999;
               if (priceRange === "Above ₹5000") return product.price > 5000;
+              return true;
             });
           default:
             return true;
@@ -176,7 +138,7 @@ export default function SunglassesPage() {
 
     if (sort === "low-to-high") filtered.sort((a, b) => a.price - b.price);
     if (sort === "high-to-low") filtered.sort((a, b) => b.price - a.price);
-    if (sort === "new") filtered.sort((a, b) => b.id - a.id);
+    if (sort === "new") filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
     return filtered;
   }, [products, selectedFilters, sort]);
@@ -227,7 +189,7 @@ export default function SunglassesPage() {
         transition={{ duration: 1 }}
       >
         <Image
-          src="/mb.png"
+          src="/banner2.svg"
           alt="Sunglasses Banner"
           fill
           className="object-cover scale-105 transition-transform duration-700 ease-out hover:scale-110"
@@ -298,60 +260,119 @@ export default function SunglassesPage() {
               variants={containerVariants}
             >
               {filteredProducts.map((product) => {
-                const discount = Math.round(
-                  ((product.originalPrice - product.price) /
-                    product.originalPrice) *
-                    100
-                );
+                const discount =
+                  product.originalPrice && product.originalPrice > product.price
+                    ? Math.round(
+                        ((product.originalPrice - product.price) /
+                          product.originalPrice) *
+                          100
+                      )
+                    : 0;
 
                 return (
                   <motion.div key={product._id} variants={productVariants}>
-                    <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-2xl hover:scale-[1.02] transform transition-all duration-300">
-                      {product.bestSeller && (
-                        <span className="absolute top-3 left-3 z-10 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
-                          Best Seller
-                        </span>
-                      )}
+                    <div className="relative bg-white border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-2xl hover:scale-[1.02] transform transition-all duration-300 flex flex-col justify-between h-full">
+                      <div>
+                        {product.bestSeller && (
+                          <span className="absolute top-3 left-3 z-10 bg-gradient-to-r from-gray-800 to-gray-900 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
+                            Best Seller
+                          </span>
+                        )}
 
-                      <Link
-                        href={`/sunglasses/${product._id}`}
-                        className="block"
-                      >
-                        <div className="relative w-full h-64 bg-gray-50 z-0">
-                          {product.images && product.images.length > 0 && (
-                            <Image
-                              src={product.images[0].url}
-                              alt={product.name}
-                              fill
-                              className="object-contain p-6 transition-transform duration-300 hover:scale-105"
-                            />
-                          )}
-                        </div>
+                        {product.stock <= 0 ? (
+                          <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider">
+                            Out of Stock
+                          </span>
+                        ) : product.stock <= 5 ? (
+                          <span className="absolute top-3 right-3 z-10 bg-amber-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1 animate-pulse">
+                            ⚡ Only {product.stock} left
+                          </span>
+                        ) : null}
 
-                        <div className="p-5 space-y-1">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {product.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">
-                            {product.size}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-gray-900">
-                              ₹{product.price}
-                            </span>
-                            {product.originalPrice && (
-                              <span className="text-sm text-gray-400 line-through">
-                                ₹{product.originalPrice}
-                              </span>
-                            )}
-                            {product.originalPrice && discount > 0 && (
-                              <span className="text-sm text-green-600 font-medium">
-                                ({discount}% OFF)
-                              </span>
+                        <Link
+                          href={`/sunglasses/${product._id}`}
+                          className="block"
+                        >
+                          <div className="relative w-full h-64 bg-gray-50 z-0">
+                            {product.images && product.images.length > 0 && (
+                              <Image
+                                src={product.images[0].url}
+                                alt={product.name}
+                                fill
+                                className="object-contain p-6 transition-transform duration-300 hover:scale-105"
+                              />
                             )}
                           </div>
-                        </div>
-                      </Link>
+
+                          <div className="p-5 space-y-2">
+                            <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
+                              {product.name}
+                            </h3>
+                            <div className="flex items-center justify-between text-xs text-gray-500">
+                              <span>{product.brand || product.size || "Standard"}</span>
+                              {product.shape && (
+                                <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-medium">
+                                  {product.shape}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 pt-1">
+                              <span className="text-lg font-bold text-gray-900">
+                                ₹{product.price}
+                              </span>
+                              {product.originalPrice > 0 && (
+                                <span className="text-sm text-gray-400 line-through">
+                                  ₹{product.originalPrice}
+                                </span>
+                              )}
+                              {discount > 0 && (
+                                <span className="text-sm text-green-600 font-medium">
+                                  ({discount}% OFF)
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Stock Indicator Line */}
+                            {product.stock <= 0 ? (
+                              <p className="text-xs text-red-600 font-bold flex items-center gap-1 pt-1">
+                                <span>❌</span> Out of Stock
+                              </p>
+                            ) : product.stock <= 5 ? (
+                              <p className="text-xs text-amber-600 font-bold flex items-center gap-1 pt-1">
+                                <span>🔥</span> Low Stock: Only {product.stock} left!
+                              </p>
+                            ) : null}
+                          </div>
+                        </Link>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="p-5 pt-0 grid grid-cols-2 gap-2">
+                        <button
+                          disabled={product.stock <= 0}
+                          onClick={(e) => handleAddToCart(e, product._id)}
+                          className={`w-full py-2.5 px-3 border text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1.5 ${
+                            product.stock <= 0
+                              ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
+                              : "bg-gray-100 hover:bg-gray-200 text-gray-900 border-gray-300"
+                          }`}
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          {product.stock <= 0 ? "Out of Stock" : "Add to Cart"}
+                        </button>
+                        <button
+                          disabled={product.stock <= 0}
+                          onClick={(e) => handleBuyNow(e, product._id)}
+                          className={`w-full py-2.5 px-3 text-xs font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-1.5 ${
+                            product.stock <= 0
+                              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                              : "bg-gray-900 hover:bg-black text-white"
+                          }`}
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          Buy Now
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 );

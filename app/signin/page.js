@@ -2,13 +2,18 @@
 
 import { useAuth } from "../../context/AuthContext";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { auth, sendPasswordResetEmail } from "../../lib/firebase";
 
 export default function SignInPage() {
   const { login, signup, googleLogin, user, fetchCurrentUser, isLoggingOut, hasLoggedOut } = useAuth();
   const router = useRouter();
   const [isSignup, setIsSignup] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetStatus, setResetStatus] = useState({ type: "", message: "" });
+  const [isResetting, setIsResetting] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -104,6 +109,46 @@ export default function SignInPage() {
     }
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      setResetStatus({ type: "error", message: "Please enter your email address." });
+      return;
+    }
+    setIsResetting(true);
+    setResetStatus({ type: "", message: "" });
+    try {
+      // Step 1: Call backend to ensure user exists in Firebase Auth
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/forgot-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: resetEmail }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setResetStatus({ type: "error", message: data.message });
+        return;
+      }
+
+      // Step 2: Use Firebase to send the password reset email
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetStatus({ type: "success", message: "Password reset email sent! Check your inbox." });
+      setTimeout(() => {
+        setShowForgotPassword(false);
+        setResetEmail("");
+        setResetStatus({ type: "", message: "" });
+      }, 3000);
+    } catch (err) {
+      console.error("❌ Password reset error:", err);
+      setResetStatus({ type: "error", message: "Failed to send reset email. Please try again." });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-6 py-12">
       <motion.div
@@ -162,9 +207,16 @@ export default function SignInPage() {
 
           {!isSignup && (
             <div className="flex justify-end">
-              {/* <span className="text-sm text-orange-600 hover:text-orange-700 cursor-pointer font-medium">
+              <span
+                onClick={() => {
+                  setShowForgotPassword(true);
+                  setResetEmail(form.email);
+                  setResetStatus({ type: "", message: "" });
+                }}
+                className="text-sm text-orange-600 hover:text-orange-700 cursor-pointer font-medium transition-colors"
+              >
                 Forgot password?
-              </span> */}
+              </span>
             </div>
           )}
 
@@ -211,6 +263,100 @@ export default function SignInPage() {
           </p>
         </div>
       </motion.div>
+
+      {/* Forgot Password Modal */}
+      <AnimatePresence>
+        {showForgotPassword && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+            onClick={() => {
+              setShowForgotPassword(false);
+              setResetStatus({ type: "", message: "" });
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Reset Password</h3>
+                <button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetStatus({ type: "", message: "" });
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-gray-600 mb-6">
+                Enter your email address and we&apos;ll send you a link to reset your password.
+              </p>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="name@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all"
+                    required
+                    autoFocus
+                  />
+                </div>
+                {resetStatus.message && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-3 rounded-lg text-sm font-medium ${
+                      resetStatus.type === "success"
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-red-50 text-red-700 border border-red-200"
+                    }`}
+                  >
+                    {resetStatus.message}
+                  </motion.div>
+                )}
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  disabled={isResetting}
+                  className={`w-full py-3 rounded-lg font-bold shadow-md transition-all ${
+                    isResetting
+                      ? "bg-orange-300 cursor-not-allowed"
+                      : "bg-orange-500 hover:bg-orange-600 hover:shadow-lg"
+                  } text-white`}
+                >
+                  {isResetting ? "Sending..." : "Send Reset Link"}
+                </motion.button>
+              </form>
+              <p className="mt-4 text-center text-sm text-gray-500">
+                Remember your password?{" "}
+                <span
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetStatus({ type: "", message: "" });
+                  }}
+                  className="text-orange-600 font-semibold cursor-pointer hover:underline"
+                >
+                  Back to Login
+                </span>
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
