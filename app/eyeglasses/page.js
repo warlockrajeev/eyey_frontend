@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +9,7 @@ import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "../../components/Toast";
 
-export default function ProductsPage() {
+function EyeglassesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sort, setSort] = useState("featured");
@@ -453,5 +453,19 @@ function FilterDropdown({ title, options, selectedOptions, onChange }) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-gray-500">Loading eyeglasses...</div>
+        </div>
+      }
+    >
+      <EyeglassesContent />
+    </Suspense>
   );
 }
